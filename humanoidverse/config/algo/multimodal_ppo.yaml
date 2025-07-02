@@ -58,10 +58,6 @@ algo:
           type: MLP
           hidden_dims: [768, 512, 128]
           activation: ELU
-    init_noise_std: 0.8
-    
-    num_learning_iterations: 100000
-    init_at_random_ep_len: True
     
     # Multimodal specific parameters
     multimodal_config:
