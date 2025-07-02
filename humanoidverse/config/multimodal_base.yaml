@@ -20,6 +20,11 @@ save_interval: 500
 logging_interval: 50
 eval_interval: 250
 
+# Robot motion configuration
+robot:
+  motion:
+    motion_file: "example/motion_data/Horse-stance_pose.pkl"  # Default motion file
+
 # Multimodal specific parameters
 multimodal:
   # Motion types to learn

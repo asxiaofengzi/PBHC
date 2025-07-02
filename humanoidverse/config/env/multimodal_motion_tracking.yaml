@@ -9,6 +9,22 @@ env:
   config:
     # Inherit from base motion tracking config and override specific parameters
     
+    # Motion data configuration for multimodal learning
+    motion_data:
+      # Default motion file (required by base class, but will be overridden)
+      motion_file: "example/motion_data/Horse-stance_pose.pkl"
+      
+      # Multimodal motion files mapping
+      motion_files:
+        taichi: "example/motion_data/Horse-stance_pose.pkl"
+        boxing: "example/motion_data/Hooks_punch.pkl"  
+        dance: "example/motion_data/Charleston_dance.pkl"
+        karate: 
+          - "example/motion_data/Side_kick.pkl"
+          - "example/motion_data/Roundhouse_kick.pkl"
+        yoga: "example/motion_data/Horse-stance_pose.pkl"
+        gymnastics: "example/motion_data/Bruce_Lee_pose.pkl"
+    
     # Multimodal specific settings
     multimodal_settings:
       motion_types: ["taichi", "boxing", "dance", "karate", "yoga", "gymnastics"]
