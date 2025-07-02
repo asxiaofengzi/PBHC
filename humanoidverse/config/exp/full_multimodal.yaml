@@ -1,0 +1,78 @@
+# @package _global_
+
+defaults:
+  - /multimodal_base
+  - _self_
+
+# Full multimodal experiment with all motion types
+experiment_name: full_multimodal_fusion
+log_task_name: FULL_MULTIMODAL
+
+# All motion types enabled
+multimodal:
+  motion_types:
+    - taichi
+    - boxing
+    - dance
+    - karate
+    - yoga
+    - gymnastics
+  
+  # Extended training for full complexity
+  training_phases:
+    pretraining:
+      num_iterations: 20000
+    
+    multimodal:
+      num_iterations: 80000
+  
+  # Comprehensive evaluation
+  evaluation:
+    motion_combinations:
+      - ["taichi", "yoga"]
+      - ["boxing", "karate"] 
+      - ["dance", "gymnastics"]
+      - ["taichi", "boxing"]
+      - ["yoga", "dance"]
+      - ["karate", "gymnastics"]
+      - ["taichi", "dance", "yoga"]
+      - ["boxing", "karate", "gymnastics"]
+
+# Enhanced simulation for complex scenarios
+num_envs: 4096
+max_episode_length_s: 45
+
+# Algorithm configuration for full complexity
+algo:
+  config:
+    # Increased capacity for complex learning
+    num_learning_epochs: 10
+    num_mini_batches: 16
+    
+    multimodal_config:
+      # Progressive curriculum for all motion types
+      progressive_training:
+        enabled: True
+        motion_introduction_schedule:
+          - iteration: 0
+            motions: ["taichi", "yoga"]  # Start with compatible pair
+          - iteration: 8000
+            motions: ["boxing", "karate"]  # Add combat arts
+          - iteration: 16000
+            motions: ["dance"]  # Add expressive movement
+          - iteration: 24000
+            motions: ["gymnastics"]  # Add athletic movement
+          - iteration: 32000
+            motions: "all"  # Full complexity
+      
+      # Enhanced architecture for complexity
+      multi_expert:
+        expert_hidden_dims: [768, 512, 256]
+        shared_encoder_dims: [512, 256]
+        
+      # Stronger regularization
+      loss_scheduling:
+        diversity_loss_weight:
+          initial: 0.05
+          final: 0.2
+          schedule_type: "linear"

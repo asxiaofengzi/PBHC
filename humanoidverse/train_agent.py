@@ -2,6 +2,12 @@ import os
 import sys
 from pathlib import Path
 
+# Add innovation_multimodal to Python path
+current_dir = Path(__file__).parent.parent
+innovation_dir = current_dir / "innovation_multimodal"
+if innovation_dir.exists():
+    sys.path.insert(0, str(current_dir))
+
 import hydra
 from hydra.core.hydra_config import HydraConfig
 from hydra.core.config_store import ConfigStore
