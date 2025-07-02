@@ -249,6 +249,17 @@ class MultimodalPPO(MHPPO):
         )
         
         # 损失函数
+        
+    def _setup_models_and_optimizer(self):
+        """重写基类方法以使用多模态模型"""
+        # 设置奖励函数数量
+        self.config.module_dict.critic['output_dim'][-1] = self.num_rew_fn
+        
+        # 调用多模态模型设置
+        self._setup_multimodal_models()
+        
+        print("🎭 Multimodal Actor:", self.actor)
+        print("🧠 Critic:", self.critic)
         self.encoder_loss_fn = MotionEncoderLoss(
             recon_weight=self.multimodal_config.get('recon_weight', 1.0),
             kl_weight=self.multimodal_config.get('kl_weight', 0.1),
