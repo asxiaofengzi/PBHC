@@ -29,6 +29,35 @@ algo:
     logging_interval: 25
     
     load_optimizer: True
+    
+    init_noise_std: 0.8
+    
+    num_learning_iterations: 1000000
+    init_at_random_ep_len: True
+    eval_callbacks: null
+    
+    # Phase embedding (inherited from base PPO)
+    phase_embed:
+      type: Original
+      dim: 16
+    
+    # Module configuration (required by base algorithm)
+    module_dict:
+      actor: 
+        input_dim: [actor_obs]
+        output_dim: [robot_action_dim]
+        layer_config:
+          type: MLP
+          hidden_dims: [512, 256, 128]
+          activation: ELU
+      critic:
+        type: MLP
+        input_dim: [critic_obs]
+        output_dim: [num_rew_fn]
+        layer_config:
+          type: MLP
+          hidden_dims: [768, 512, 128]
+          activation: ELU
     init_noise_std: 0.8
     
     num_learning_iterations: 100000
