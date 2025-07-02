@@ -1,0 +1,91 @@
+# @package _global_
+
+defaults:
+  - base
+  - env/multimodal_motion_tracking
+  - algo/multimodal_ppo
+  - _self_
+
+# Override global variables for multimodal learning
+project_name: MULTIMODAL_MOTION_FUSION
+experiment_name: multimodal_learning
+log_task_name: MULTIMODAL
+
+# Simulation parameters
+num_envs: 2048  # Reduced for multimodal complexity
+max_episode_length_s: 30  # Shorter episodes for faster switching
+
+# Training parameters
+save_interval: 500
+logging_interval: 50
+eval_interval: 250
+
+# Multimodal specific parameters
+multimodal:
+  # Motion types to learn
+  motion_types:
+    - taichi
+    - boxing
+    - dance
+    - karate
+    - yoga
+    - gymnastics
+  
+  # Training phases
+  training_phases:
+    pretraining:
+      enable: True
+      num_iterations: 10000
+      single_motion_per_env: True
+      curriculum_learning: False
+    
+    multimodal:
+      enable: True
+      num_iterations: 50000
+      motion_switching: True
+      fusion_learning: True
+      curriculum_learning: True
+  
+  # Fusion parameters
+  fusion:
+    latent_dim: 128
+    temperature: 1.0
+    smooth_transition_steps: 30
+    compatibility_threshold: 0.3
+    quality_threshold: 0.7
+  
+  # Curriculum learning
+  curriculum:
+    enable: True
+    initial_difficulty: 0.1
+    max_difficulty: 1.0
+    difficulty_step: 0.02
+    success_rate_threshold: 0.8
+    failure_rate_threshold: 0.3
+  
+  # Evaluation
+  evaluation:
+    motion_combinations: 
+      - ["taichi", "yoga"]
+      - ["boxing", "karate"] 
+      - ["dance", "gymnastics"]
+      - ["taichi", "boxing"]
+      - ["yoga", "dance"]
+    
+    metrics:
+      - motion_similarity
+      - fusion_quality
+      - transition_smoothness
+      - success_rate
+      - reward_consistency
+
+# Data paths
+data_paths:
+  motion_data_dir: "example/motion_data"
+  pretrained_models_dir: "innovation_multimodal/pretrained"
+  output_dir: "${experiment_dir}/multimodal_output"
+
+# Logging
+wandb:
+  tags: ["multimodal", "motion_fusion", "innovation"]
+  group: "multimodal_learning"

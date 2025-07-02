@@ -1,0 +1,63 @@
+# @package _global_
+
+defaults:
+  - /multimodal_base
+  - _self_
+
+# Specific experiment: Taichi-Boxing fusion learning
+experiment_name: taichi_boxing_fusion
+log_task_name: TAICHI_BOXING
+
+# Focus on two motion types for this experiment
+multimodal:
+  motion_types:
+    - taichi
+    - boxing
+  
+  # Specialized training for this combination
+  training_phases:
+    pretraining:
+      num_iterations: 8000  # Reduced for focused training
+    
+    multimodal:
+      num_iterations: 25000
+  
+  # Evaluation specific to this combination
+  evaluation:
+    motion_combinations:
+      - ["taichi", "boxing"]
+      - ["boxing", "taichi"]
+    
+    detailed_metrics:
+      - soft_hard_transition_quality
+      - yin_yang_balance_score
+      - combat_efficiency_metrics
+      - flow_state_preservation
+
+# Reward tuning for Taichi-Boxing combination
+env:
+  config:
+    reward_config:
+      # Emphasize smooth transitions between soft and hard movements
+      transition_smoothness_weight: 0.25
+      
+      # Bonus for maintaining flow while adding power
+      flow_power_balance_weight: 0.15
+      
+      # Penalty for losing martial arts essence
+      martial_arts_essence_penalty: -0.4
+
+# Algorithm tuning
+algo:
+  config:
+    # More conservative learning for this complex combination
+    actor_learning_rate: 3.e-4
+    
+    multimodal_config:
+      # Higher weight on compatibility for contrasting styles
+      motion_encoder:
+        compatibility_weight: 0.5
+      
+      # Enhanced fusion control for style contrast
+      fusion_controller:
+        fusion_loss_weight: 0.7

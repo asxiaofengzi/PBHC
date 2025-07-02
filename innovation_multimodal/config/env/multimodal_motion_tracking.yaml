@@ -1,0 +1,110 @@
+# @package _global_
+
+defaults:
+  - /env/motion_tracking
+
+# Override environment configuration for multimodal learning
+env:
+  _target_: innovation_multimodal.multimodal_env.MultimodalMotionTrackingEnv
+  config:
+    # Inherit from base motion tracking config and override specific parameters
+    
+    # Multimodal specific settings
+    multimodal_settings:
+      motion_types: ["taichi", "boxing", "dance", "karate", "yoga", "gymnastics"]
+      latent_dim: 128
+      max_motions_per_episode: 3
+      min_motion_duration_s: 3.0
+      max_motion_duration_s: 8.0
+      transition_duration_s: 1.0
+      
+      # Motion switching strategy
+      switching_strategy: "curriculum"  # "random", "curriculum", "adaptive"
+      switching_probability: 0.3
+      
+      # Fusion parameters
+      fusion_weight_noise: 0.1
+      fusion_temperature: 1.0
+      compatibility_threshold: 0.3
+      
+    # Curriculum learning
+    curriculum_learning:
+      enable: True
+      phases:
+        single_motion:
+          duration_iterations: 10000
+          difficulty_range: [0.1, 0.3]
+        
+        dual_motion:
+          duration_iterations: 20000  
+          difficulty_range: [0.3, 0.6]
+          compatible_pairs_only: True
+        
+        multi_motion:
+          duration_iterations: 30000
+          difficulty_range: [0.6, 1.0]
+          any_combination: True
+      
+      difficulty_adjustment:
+        success_rate_window: 1000
+        target_success_rate: 0.75
+        difficulty_step: 0.05
+    
+    # Reward configuration
+    reward_config:
+      # Base motion tracking rewards (inherited)
+      motion_tracking_weight: 0.6
+      
+      # Fusion specific rewards
+      fusion_quality_weight: 0.2
+      transition_smoothness_weight: 0.1
+      compatibility_bonus_weight: 0.05
+      innovation_bonus_weight: 0.05
+      
+      # Penalties
+      fusion_failure_penalty: -0.5
+      jarring_transition_penalty: -0.3
+      incompatible_motion_penalty: -0.2
+    
+    # Termination conditions (additional to base)
+    termination:
+      terminate_on_fusion_failure: True
+      terminate_on_excessive_deviation: True
+      max_fusion_attempts_per_episode: 5
+      
+      fusion_quality_threshold: 0.1  # Minimum acceptable fusion quality
+      motion_deviation_threshold: 2.0  # Maximum deviation from reference
+    
+    # Observation configuration
+    observation_config:
+      include_motion_type_encoding: True
+      include_fusion_weights: True
+      include_compatibility_scores: True
+      include_phase_information: True
+      
+      motion_history_steps: 10
+      future_motion_steps: 5
+    
+    # Noise and randomization
+    noise_config:
+      motion_type_noise: 0.05
+      fusion_weight_noise: 0.1
+      transition_timing_noise: 0.2
+      
+    # Episode structure
+    episode_config:
+      warmup_steps: 50  # Steps before first motion switch
+      cooldown_steps: 30  # Steps after last motion
+      
+      # Motion scheduling
+      motion_schedule:
+        type: "adaptive"  # "fixed", "random", "adaptive"
+        min_segments: 2
+        max_segments: 4
+        
+    # Evaluation specific settings
+    eval_config:
+      predefined_sequences: True
+      test_all_combinations: True
+      measure_fusion_metrics: True
+      record_trajectories: True

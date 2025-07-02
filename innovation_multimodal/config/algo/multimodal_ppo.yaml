@@ -1,0 +1,185 @@
+# @package _global_
+
+algo:
+  _target_: innovation_multimodal.multimodal_ppo.MultimodalPPO
+  _recursive_: False
+  config:
+    # Base PPO parameters
+    num_learning_epochs: 8
+    num_mini_batches: 8
+    clip_param: 0.2
+    gamma: 0.99
+    lam: 0.95
+    value_loss_coef: 1.0
+    entropy_coef: 0.01
+    
+    # Learning rates
+    actor_learning_rate: 5.e-4
+    critic_learning_rate: 5.e-4
+    motion_encoder_learning_rate: 1.e-4
+    fusion_controller_learning_rate: 1.e-4
+    
+    max_grad_norm: 1.0
+    use_clipped_value_loss: True
+    schedule: "adaptive"
+    desired_kl: 0.01
+    
+    num_steps_per_env: 32
+    save_interval: 500
+    logging_interval: 25
+    
+    load_optimizer: True
+    init_noise_std: 0.8
+    
+    num_learning_iterations: 100000
+    init_at_random_ep_len: True
+    
+    # Multimodal specific parameters
+    multimodal_config:
+      # Training phases
+      pretraining_phase:
+        enabled: True
+        num_iterations: 15000
+        single_motion_training: True
+        freeze_fusion_controller: True
+        
+      multimodal_phase:
+        enabled: True
+        num_iterations: 85000
+        motion_encoder_training: True
+        fusion_controller_training: True
+        multi_expert_training: True
+      
+      # Multi-expert architecture
+      multi_expert:
+        num_experts: 6  # One for each motion type
+        expert_hidden_dims: [512, 256, 128]
+        shared_encoder_dims: [256, 128]
+        gating_network_dims: [128, 64]
+        
+        # Expert specialization
+        expert_specialization_weight: 0.3
+        diversity_loss_weight: 0.1
+        
+      # Motion encoder integration
+      motion_encoder:
+        latent_dim: 128
+        reconstruction_weight: 1.0
+        kl_divergence_weight: 0.5
+        classification_weight: 0.8
+        compatibility_weight: 0.3
+        
+        # Training schedule
+        warmup_iterations: 5000
+        encoder_update_frequency: 4
+        
+      # Fusion controller integration  
+      fusion_controller:
+        fusion_loss_weight: 0.5
+        transition_smoothness_weight: 0.3
+        quality_prediction_weight: 0.2
+        
+        # Update schedule
+        controller_update_frequency: 2
+        quality_prediction_training: True
+        
+      # Loss weights scheduling
+      loss_scheduling:
+        motion_tracking_weight:
+          initial: 1.0
+          final: 0.6
+          schedule_type: "linear"
+          
+        fusion_quality_weight:
+          initial: 0.1
+          final: 0.4
+          schedule_type: "exponential"
+          
+        innovation_bonus_weight:
+          initial: 0.0
+          final: 0.2
+          schedule_type: "sigmoid"
+    
+    # Module architecture definitions
+    module_dict:
+      # Shared encoder for all experts
+      shared_encoder:
+        input_dim: [actor_obs]
+        output_dim: [256]
+        layer_config:
+          type: MLP
+          hidden_dims: [512, 384, 256]
+          activation: ELU
+          dropout: 0.1
+      
+      # Expert networks (one per motion type)
+      expert_networks:
+        input_dim: [256]  # From shared encoder
+        output_dim: [robot_action_dim]
+        layer_config:
+          type: MLP
+          hidden_dims: [256, 128, 64]
+          activation: ELU
+          batch_norm: True
+      
+      # Gating network for expert selection
+      gating_network:
+        input_dim: [actor_obs, 128]  # obs + motion encoding
+        output_dim: [6]  # Number of experts
+        layer_config:
+          type: MLP
+          hidden_dims: [256, 128, 64]
+          activation: ELU
+          final_activation: Softmax
+      
+      # Critic network
+      critic:
+        input_dim: [critic_obs]
+        output_dim: [num_rew_fn]
+        layer_config:
+          type: MLP
+          hidden_dims: [768, 512, 256, 128]
+          activation: ELU
+          dropout: 0.1
+      
+      # Motion type classifier (auxiliary task)
+      motion_classifier:
+        input_dim: [actor_obs]
+        output_dim: [6]  # Number of motion types
+        layer_config:
+          type: MLP
+          hidden_dims: [256, 128, 64]
+          activation: ELU
+          final_activation: Softmax
+    
+    # Evaluation callbacks
+    eval_callbacks:
+      - fusion_quality_metrics
+      - motion_compatibility_analysis
+      - transition_smoothness_evaluation
+      - innovation_assessment
+    
+    # Advanced training techniques
+    training_techniques:
+      # Gradient penalty for stability
+      gradient_penalty:
+        enabled: True
+        weight: 0.1
+        
+      # Spectral normalization
+      spectral_normalization:
+        enabled: True
+        apply_to: ["gating_network", "expert_networks"]
+        
+      # Progressive training
+      progressive_training:
+        enabled: True
+        start_with_compatible_pairs: True
+        add_motion_every_n_iterations: 5000
+        
+      # Experience replay for multimodal samples
+      experience_replay:
+        enabled: True
+        buffer_size: 10000
+        replay_ratio: 0.2
+        prioritized_sampling: True
