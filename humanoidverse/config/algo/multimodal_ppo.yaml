@@ -52,7 +52,7 @@ algo:
       critic:
         type: MLP
         input_dim: [critic_obs]
-        output_dim: [num_rew_fn]
+        output_dim: [1]
         layer_config:
           type: MLP
           hidden_dims: [768, 512, 128]
