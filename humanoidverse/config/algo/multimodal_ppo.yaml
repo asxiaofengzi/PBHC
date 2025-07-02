@@ -34,7 +34,6 @@ algo:
     
     num_learning_iterations: 1000000
     init_at_random_ep_len: True
-    eval_callbacks: null
     
     # Phase embedding (inherited from base PPO)
     phase_embed:
@@ -124,58 +123,6 @@ algo:
           initial: 0.0
           final: 0.2
           schedule_type: "sigmoid"
-    
-    # Module architecture definitions
-    module_dict:
-      # Shared encoder for all experts
-      shared_encoder:
-        input_dim: [actor_obs]
-        output_dim: [256]
-        layer_config:
-          type: MLP
-          hidden_dims: [512, 384, 256]
-          activation: ELU
-          dropout: 0.1
-      
-      # Expert networks (one per motion type)
-      expert_networks:
-        input_dim: [256]  # From shared encoder
-        output_dim: [robot_action_dim]
-        layer_config:
-          type: MLP
-          hidden_dims: [256, 128, 64]
-          activation: ELU
-          batch_norm: True
-      
-      # Gating network for expert selection
-      gating_network:
-        input_dim: [actor_obs, 128]  # obs + motion encoding
-        output_dim: [6]  # Number of experts
-        layer_config:
-          type: MLP
-          hidden_dims: [256, 128, 64]
-          activation: ELU
-          final_activation: Softmax
-      
-      # Critic network
-      critic:
-        input_dim: [critic_obs]
-        output_dim: [num_rew_fn]
-        layer_config:
-          type: MLP
-          hidden_dims: [768, 512, 256, 128]
-          activation: ELU
-          dropout: 0.1
-      
-      # Motion type classifier (auxiliary task)
-      motion_classifier:
-        input_dim: [actor_obs]
-        output_dim: [6]  # Number of motion types
-        layer_config:
-          type: MLP
-          hidden_dims: [256, 128, 64]
-          activation: ELU
-          final_activation: Softmax
     
     # Evaluation callbacks
     eval_callbacks:
