@@ -32,7 +32,7 @@ algo:
     
     init_noise_std: 0.8
     
-    num_learning_iterations: 1000000
+    num_learning_iterations: 35000  # 8000预训练 + 25000融合 + 2000微调
     init_at_random_ep_len: True
     
     # Phase embedding (inherited from base PPO)
@@ -58,31 +58,31 @@ algo:
           hidden_dims: [768, 512, 128]
           activation: ELU
     
-    # Multimodal specific parameters
+    # Multimodal specific parameters (太极+拳击专用)
     multimodal_config:
       # Training phases
       pretraining_phase:
         enabled: True
-        num_iterations: 15000
+        num_iterations: 8000      # 减少预训练时间
         single_motion_training: True
         freeze_fusion_controller: True
         
       multimodal_phase:
         enabled: True
-        num_iterations: 85000
+        num_iterations: 25000     # 专注于太极+拳击融合
         motion_encoder_training: True
         fusion_controller_training: True
         multi_expert_training: True
       
-      # Multi-expert architecture
+      # Multi-expert architecture (只需要2个专家)
       multi_expert:
-        num_experts: 6  # One for each motion type
+        num_experts: 2  # 太极专家 + 拳击专家
         expert_hidden_dims: [512, 256, 128]
         shared_encoder_dims: [256, 128]
         gating_network_dims: [128, 64]
         
         # Expert specialization
-        expert_specialization_weight: 0.3
+        expert_specialization_weight: 0.4  # 增强专门化
         diversity_loss_weight: 0.1
         
       # Motion encoder integration
@@ -139,15 +139,15 @@ algo:
         enabled: True
         apply_to: ["gating_network", "expert_networks"]
         
-      # Progressive training
+      # Progressive training (针对太极+拳击优化)
       progressive_training:
         enabled: True
-        start_with_compatible_pairs: True
-        add_motion_every_n_iterations: 5000
+        start_with_compatible_pairs: False  # 太极+拳击是挑战性组合
+        add_motion_every_n_iterations: 4000  # 更快的进度
         
-      # Experience replay for multimodal samples
+      # Experience replay for multimodal samples  
       experience_replay:
         enabled: True
-        buffer_size: 10000
-        replay_ratio: 0.2
+        buffer_size: 5000   # 减少缓冲区大小
+        replay_ratio: 0.3   # 增加重放比例
         prioritized_sampling: True

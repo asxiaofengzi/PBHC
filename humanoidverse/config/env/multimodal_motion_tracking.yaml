@@ -14,22 +14,16 @@ env:
       # Default motion file (required by base class, but will be overridden)
       motion_file: "example/motion_data/Horse-stance_pose.pkl"
       
-      # Multimodal motion files mapping
+      # Multimodal motion files mapping (只训练太极+拳击)
       motion_files:
         taichi: "example/motion_data/Horse-stance_pose.pkl"
-        boxing: "example/motion_data/Hooks_punch.pkl"  
-        dance: "example/motion_data/Charleston_dance.pkl"
-        karate: 
-          - "example/motion_data/Side_kick.pkl"
-          - "example/motion_data/Roundhouse_kick.pkl"
-        yoga: "example/motion_data/Horse-stance_pose.pkl"
-        gymnastics: "example/motion_data/Bruce_Lee_pose.pkl"
+        boxing: "example/motion_data/Hooks_punch.pkl"
     
-    # Multimodal specific settings
+    # Multimodal specific settings (只包含太极和拳击)
     multimodal_settings:
-      motion_types: ["taichi", "boxing", "dance", "karate", "yoga", "gymnastics"]
+      motion_types: ["taichi", "boxing"]
       latent_dim: 128
-      max_motions_per_episode: 3
+      max_motions_per_episode: 2  # 最多2种运动
       min_motion_duration_s: 3.0
       max_motion_duration_s: 8.0
       transition_duration_s: 1.0
@@ -43,23 +37,20 @@ env:
       fusion_temperature: 1.0
       compatibility_threshold: 0.3
       
-    # Curriculum learning
+    # Curriculum learning (针对太极+拳击优化)
     curriculum_learning:
       enable: True
       phases:
         single_motion:
-          duration_iterations: 10000
+          duration_iterations: 8000   # 减少单运动训练时间
           difficulty_range: [0.1, 0.3]
         
         dual_motion:
-          duration_iterations: 20000  
-          difficulty_range: [0.3, 0.6]
-          compatible_pairs_only: True
+          duration_iterations: 25000  # 重点训练太极+拳击融合
+          difficulty_range: [0.3, 0.8]
+          compatible_pairs_only: False  # 太极+拳击是挑战性组合
         
-        multi_motion:
-          duration_iterations: 30000
-          difficulty_range: [0.6, 1.0]
-          any_combination: True
+        # 移除multi_motion阶段，专注于双运动融合
       
       difficulty_adjustment:
         success_rate_window: 1000
@@ -112,11 +103,11 @@ env:
       warmup_steps: 50  # Steps before first motion switch
       cooldown_steps: 30  # Steps after last motion
       
-      # Motion scheduling
+      # Motion scheduling (针对太极+拳击的简化调度)
       motion_schedule:
         type: "adaptive"  # "fixed", "random", "adaptive"
         min_segments: 2
-        max_segments: 4
+        max_segments: 3   # 最多3个片段：太极->融合->拳击
         
     # Evaluation specific settings
     eval_config:

@@ -20,28 +20,24 @@ save_interval: 500
 logging_interval: 50
 eval_interval: 250
 
-# Multimodal specific parameters
+# Multimodal specific parameters (只训练太极+拳击)
 multimodal:
   # Motion types to learn
   motion_types:
     - taichi
     - boxing
-    - dance
-    - karate
-    - yoga
-    - gymnastics
   
-  # Training phases
+  # Training phases (针对太极+拳击优化)
   training_phases:
     pretraining:
       enable: True
-      num_iterations: 10000
+      num_iterations: 8000      # 减少预训练时间
       single_motion_per_env: True
       curriculum_learning: False
     
     multimodal:
       enable: True
-      num_iterations: 50000
+      num_iterations: 25000     # 专注于双运动融合
       motion_switching: True
       fusion_learning: True
       curriculum_learning: True
@@ -63,14 +59,10 @@ multimodal:
     success_rate_threshold: 0.8
     failure_rate_threshold: 0.3
   
-  # Evaluation
+  # Evaluation (只评估太极+拳击融合)
   evaluation:
     motion_combinations: 
-      - ["taichi", "yoga"]
-      - ["boxing", "karate"] 
-      - ["dance", "gymnastics"]
-      - ["taichi", "boxing"]
-      - ["yoga", "dance"]
+      - ["taichi", "boxing"]      # 太极马步 + 拳击勾拳
     
     metrics:
       - motion_similarity
