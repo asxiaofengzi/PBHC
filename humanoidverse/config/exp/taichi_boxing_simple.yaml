@@ -1,0 +1,102 @@
+# @package _global_
+
+defaults:
+  - base
+  - env/motion_tracking
+  - algo/mh_ppo
+  - obs/motion_tracking/main
+  - robot/g1/g1_23dof_lock_wrist
+  - domain_rand/main
+  - rewards/motion_tracking/main
+  - simulator/isaacgym
+  - terrain/terrain_locomotion_plane
+  - _self_
+
+# 项目设置
+project_name: TAICHI_BOXING_FUSION
+experiment_name: taichi_boxing_fusion
+log_task_name: TAICHI_BOXING
+
+# 环境设置
+num_envs: 128
+max_episode_length_s: 30
+
+# 使用多模态环境和算法
+env:
+  _target_: innovation_multimodal.multimodal_env.MultimodalMotionTrackingEnv
+  config:
+    # 继承基础运动跟踪配置
+    ${base_env_config}
+    
+    # 多模态运动数据
+    motion_data:
+      motion_file: "example/motion_data/Horse-stance_pose.pkl"
+      motion_files:
+        taichi: "example/motion_data/Horse-stance_pose.pkl"
+        boxing: "example/motion_data/Hooks_punch.pkl"
+    
+    # 多模态设置
+    multimodal_settings:
+      motion_types: ["taichi", "boxing"]
+      latent_dim: 128
+      max_motions_per_episode: 2
+      min_motion_duration_s: 3.0
+      max_motion_duration_s: 8.0
+      transition_duration_s: 1.0
+      switching_strategy: "curriculum"
+      switching_probability: 0.3
+      fusion_weight_noise: 0.1
+      fusion_temperature: 1.0
+      compatibility_threshold: 0.3
+    
+    # 课程学习
+    curriculum_learning:
+      enable: True
+      phases:
+        single_motion:
+          duration_iterations: 8000
+          difficulty_range: [0.1, 0.3]
+        dual_motion:
+          duration_iterations: 25000
+          difficulty_range: [0.3, 0.8]
+          compatible_pairs_only: False
+    
+    # 奖励配置
+    reward_config:
+      motion_tracking_weight: 0.6
+      fusion_quality_weight: 0.2
+      transition_smoothness_weight: 0.1
+      compatibility_bonus_weight: 0.05
+      innovation_bonus_weight: 0.05
+
+# 使用多模态PPO算法
+algo:
+  _target_: innovation_multimodal.multimodal_ppo.MultimodalPPO
+  _recursive_: False
+  config:
+    ${base_algo_config}
+    
+    # 多模态特定参数
+    num_learning_iterations: 35000
+    
+    multimodal_config:
+      pretraining_phase:
+        enabled: True
+        num_iterations: 8000
+        single_motion_training: True
+        freeze_fusion_controller: True
+      
+      multimodal_phase:
+        enabled: True
+        num_iterations: 25000
+        motion_encoder_training: True
+        fusion_controller_training: True
+        multi_expert_training: True
+      
+      multi_expert:
+        num_experts: 2
+        expert_hidden_dims: [512, 256, 128]
+        shared_encoder_dims: [256, 128]
+        gating_network_dims: [128, 64]
+        expert_specialization_weight: 0.4
+        diversity_loss_weight: 0.1
