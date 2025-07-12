@@ -4,11 +4,11 @@ defaults:
   - base
   - env/multimodal_motion_tracking
   - algo/multimodal_ppo
-  - obs: motion_tracking/main
-  - rewards: motion_tracking/main
-  - robot: g1/g1_23dof_lock_wrist
-  - domain_rand: main
-  - terrain: terrain_locomotion_plane
+  # - obs: motion_tracking/main
+  # - rewards: motion_tracking/main
+  # - robot: g1/g1_23dof_lock_wrist
+  # - domain_rand: main
+  # - terrain: terrain_locomotion_plane
   - _self_
 
 # Override global variables for multimodal learning

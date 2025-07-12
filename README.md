@@ -141,3 +141,14 @@ For collaborations, feedback, or further inquiries, please reach out to:
 
 
 We welcome contributions and are happy to support the community in building upon this work!
+
+
+
+python humanoidverse/train_agent.py \
++simulator=isaacgym \
++exp=taichi_boxing_fusion \
+project_name=MultimodalMotionTracking \
+num_envs=128 \
+experiment_name=taichi_boxing_debug \
+seed=1 \
++device=cuda:0

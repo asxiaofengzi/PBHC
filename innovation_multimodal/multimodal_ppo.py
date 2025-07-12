@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import numpy as np
 from typing import Dict, List, Optional, Tuple
 import sys
 import os
@@ -197,18 +198,15 @@ class MultimodalPPO(MHPPO):
         super().__init__(env, config, log_dir, device)
         
         # 多模态相关配置
-        self.multimodal_config = config.get('multimodal', {})
+        self.multimodal_config = config.get('multimodal_config', {})
         self.enable_expert_training = self.multimodal_config.get('enable_expert_training', True)
-        self.encoder_learning_rate = self.multimodal_config.get('encoder_learning_rate', 1e-4)
+        self.encoder_learning_rate = config.get('motion_encoder_learning_rate', 1e-4)
         self.fusion_loss_weight = self.multimodal_config.get('fusion_loss_weight', 0.1)
         
         # 预训练阶段标志
         self.pretraining_phase = self.multimodal_config.get('start_with_pretraining', True)
         self.pretraining_iterations = self.multimodal_config.get('pretraining_iterations', 5000)
         self.current_phase = 'pretraining' if self.pretraining_phase else 'multimodal'
-        
-        # 重新设置模型和优化器
-        self._setup_multimodal_models()
     
     def _setup_multimodal_models(self):
         """设置多模态模型"""
@@ -247,11 +245,19 @@ class MultimodalPPO(MHPPO):
             self.fusion_controller.parameters(),
             lr=self.encoder_learning_rate
         )
-        
-        # 损失函数
+          # 损失函数
+        self.encoder_loss_fn = MotionEncoderLoss(
+            recon_weight=self.multimodal_config.get('recon_weight', 1.0),
+            kl_weight=self.multimodal_config.get('kl_weight', 0.1),
+            classification_weight=self.multimodal_config.get('classification_weight', 0.5)
+        )
         
     def _setup_models_and_optimizer(self):
         """重写基类方法以使用多模态模型"""
+        # 确保 num_rew_fn 已正确设置
+        if not hasattr(self, 'num_rew_fn'):
+            self.num_rew_fn = self.env.num_rew_fn
+        
         # 设置奖励函数数量
         self.config.module_dict.critic['output_dim'][-1] = self.num_rew_fn
         
@@ -260,11 +266,6 @@ class MultimodalPPO(MHPPO):
         
         print("🎭 Multimodal Actor:", self.actor)
         print("🧠 Critic:", self.critic)
-        self.encoder_loss_fn = MotionEncoderLoss(
-            recon_weight=self.multimodal_config.get('recon_weight', 1.0),
-            kl_weight=self.multimodal_config.get('kl_weight', 0.1),
-            classification_weight=self.multimodal_config.get('classification_weight', 0.5)
-        )
     
     def _actor_rollout_step(self, obs_dict, policy_state_dict):
         """重写Actor rollout步骤以支持多专家"""
