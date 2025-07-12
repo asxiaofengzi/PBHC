@@ -124,12 +124,8 @@ algo:
           final: 0.2
           schedule_type: "sigmoid"
     
-    # Evaluation callbacks
-    eval_callbacks:
-      - fusion_quality_metrics
-      - motion_compatibility_analysis
-      - transition_smoothness_evaluation
-      - innovation_assessment
+    # Evaluation callbacks (设置为null避免格式错误)
+    eval_callbacks: null
     
     # Advanced training techniques
     training_techniques:
