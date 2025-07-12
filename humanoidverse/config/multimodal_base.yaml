@@ -4,6 +4,11 @@ defaults:
   - base
   - env/multimodal_motion_tracking
   - algo/multimodal_ppo
+  - obs: motion_tracking/main
+  - rewards: motion_tracking/main
+  - robot: g1/g1_23dof_lock_wrist
+  - domain_rand: main
+  - terrain: terrain_locomotion_plane
   - _self_
 
 # Override global variables for multimodal learning
@@ -19,6 +24,36 @@ max_episode_length_s: 30  # Shorter episodes for faster switching
 save_interval: 500
 logging_interval: 50
 eval_interval: 250
+
+# Inherit all base configurations
+seed: 0
+codebase_version: 1.0
+headless: True
+
+### Checkpoint logic
+auto_load_latest: False
+checkpoint: null
+
+### Naming and dir structure
+base_dir: logs
+timestamp: ${now:%Y%m%d_%H%M%S}
+experiment_dir: ${base_dir}/${project_name}/${timestamp}-${experiment_name}-${log_task_name}-${robot.asset.robot_type}
+save_dir: ${experiment_dir}/.hydra
+
+force_flat_terrain: False
+
+use_wandb: False
+
+### Simulation
+sim_type: isaacgym
+env_spacing: 20
+output_dir: ${experiment_dir}/output
+
+eval_overrides:
+  headless: False
+  num_envs: 1
+  auto_load_latest: False
+  use_wandb: False
 
 # Robot motion configuration
 robot:
@@ -84,5 +119,7 @@ data_paths:
 
 # Logging
 wandb:
+  wandb_entity: null  # Set your wandb entity
+  wandb_dir: ${experiment_dir}/wandb
   tags: ["multimodal", "motion_fusion", "innovation"]
   group: "multimodal_learning"

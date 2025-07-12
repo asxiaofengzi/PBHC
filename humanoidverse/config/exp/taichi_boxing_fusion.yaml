@@ -1,7 +1,9 @@
 # @package _global_
 
 defaults:
-  - /multimodal_base
+  - /multimodal_base           # 先继承多模态基础配置
+  - /algo: multimodal_ppo      # 然后明确指定多模态PPO算法
+  - /env: multimodal_motion_tracking  # 最后明确指定多模态环境
   - _self_
 
 # Specific experiment: Taichi-Boxing fusion learning
