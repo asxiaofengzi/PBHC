@@ -73,8 +73,16 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
             transition_threshold=self.multimodal_config.get('transition_threshold', 0.3)
         )
         
-        # 扩展运动库以支持多运动类型
+        # 自动触发参数
+        self.auto_trigger_enabled = self.multimodal_config.get('auto_trigger', True)
+        self.trigger_interval = self.multimodal_config.get('trigger_interval', 200)  # 步数
+        self.trigger_probability = self.multimodal_config.get('trigger_probability', 0.1)  # 概率
+        self.last_trigger_step = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+          # 扩展运动库以支持多运动类型
         self._extend_motion_lib()
+        
+        # 初始化融合系统
+        self._initialize_fusion_system()
     
     def _extend_motion_lib(self):
         """扩展运动库以支持多运动类型标记"""
@@ -85,8 +93,7 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
             'Charleston_dance': MotionType.DANCE,
             'Hooks_punch': MotionType.BOXING,
             'Roundhouse_kick': MotionType.KARATE,
-            'Side_kick': MotionType.KARATE
-        }
+            'Side_kick': MotionType.KARATE        }
         
         # 创建运动类型索引
         self.motion_types_tensor = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
@@ -94,6 +101,27 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
             motion_name = self._get_motion_name_for_env(env_id)
             motion_type = self.motion_type_mapping.get(motion_name, MotionType.TAICHI)
             self.motion_types_tensor[env_id] = list(MotionType).index(motion_type)
+    
+    def _initialize_fusion_system(self):
+        """初始化融合系统状态"""
+        print(f"[MultimodalEnv] 初始化融合系统 - 环境数量: {self.num_envs}")
+        
+        # 初始化融合权重为均匀分布
+        num_motion_types = len(MotionType)
+        uniform_weights = torch.ones(self.num_envs, num_motion_types, device=self.device) / num_motion_types
+        self.current_fusion_weights = uniform_weights
+        
+        # 初始化调度器历史
+        for env_id in range(self.num_envs):
+            self.fusion_scheduler.update_history(
+                uniform_weights[env_id:env_id+1],
+                self.motion_types_tensor[env_id].item()
+            )
+        
+        # 添加自动触发计数器
+        self.step_counter = 0
+        
+        print(f"[MultimodalEnv] 融合系统初始化完成 - 自动触发: {self.auto_trigger_enabled}")
     
     def _get_motion_name_for_env(self, env_id: int) -> str:
         """获取环境对应的运动名称（简化实现）"""
@@ -266,17 +294,24 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
             # 重置计数器
             self.fusion_success_count = 0
             self.total_fusion_attempts = 0
-    
+
     def _post_physics_step(self):
         """重写物理步骤后处理，添加多模态逻辑"""
         super()._post_physics_step()
         
         if self.enable_fusion:
+            # 增加步数计数器
+            self.step_counter += 1
+            
             # 更新融合历史
             if hasattr(self, 'current_fusion_weights'):
                 self.fusion_history.append(self.current_fusion_weights.clone())
                 if len(self.fusion_history) > 50:  # 保持固定长度
                     self.fusion_history.pop(0)
+            
+            # 自动触发运动过渡
+            if self.auto_trigger_enabled:
+                self._auto_trigger_transitions()
             
             # 检查过渡完成
             self._check_transition_completion()
@@ -284,6 +319,43 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
             # 更新课程学习
             if self.common_step_counter % 1000 == 0:
                 self.update_curriculum()
+    
+    def _auto_trigger_transitions(self):
+        """自动触发运动过渡"""
+        # 检查哪些环境应该触发过渡
+        should_trigger = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        
+        for env_id in range(self.num_envs):
+            # 基于时间间隔的触发
+            steps_since_last = self.step_counter - self.last_trigger_step[env_id]
+            if steps_since_last >= self.trigger_interval:
+                # 随机概率触发
+                if torch.rand(1).item() < self.trigger_probability:
+                    should_trigger[env_id] = True
+                    self.last_trigger_step[env_id] = self.step_counter
+        
+        # 基于融合质量的触发（如果融合权重过于集中，触发新的运动）
+        if hasattr(self, 'current_fusion_weights'):
+            # 计算权重的方差，如果方差过小说明过于集中
+            weight_variance = torch.var(self.current_fusion_weights, dim=-1)
+            low_variance_envs = weight_variance < 0.1  # 阈值可调
+            
+            # 给低方差环境一定概率触发过渡
+            random_mask = torch.rand(self.num_envs, device=self.device) < 0.05  # 5%概率
+            should_trigger = should_trigger | (low_variance_envs & random_mask)
+        
+        # 触发选中的环境
+        trigger_env_ids = should_trigger.nonzero(as_tuple=False).squeeze(-1)
+        if len(trigger_env_ids) > 0:
+            # 随机选择目标运动类型
+            target_types = torch.randint(
+                0, len(MotionType), 
+                (len(trigger_env_ids),), 
+                device=self.device
+            )
+            
+            print(f"[MultimodalEnv] 自动触发过渡 - 环境数量: {len(trigger_env_ids)}")
+            self.trigger_motion_transition(trigger_env_ids, target_types)
     
     def _check_transition_completion(self):
         """检查运动过渡是否完成"""
@@ -303,7 +375,7 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
                 
                 # 更新当前运动类型
                 self.current_motion_types[env_id] = target_motion
-    
+
     def get_multimodal_info(self) -> Dict:
         """获取多模态状态信息"""
         info = {
@@ -320,8 +392,20 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
                 'fusion_entropy': self._compute_fusion_entropy().mean().item()
             })
         
+        # 确保融合成功率总是有值
         if self.total_fusion_attempts > 0:
             info['fusion_success_rate'] = self.fusion_success_count / self.total_fusion_attempts
+        else:
+            # 如果还没有尝试过，显示 0.0 而不是 N/A
+            info['fusion_success_rate'] = 0.0
+        
+        # 添加更多调试信息
+        info.update({
+            'step_counter': getattr(self, 'step_counter', 0),
+            'total_attempts': self.total_fusion_attempts,
+            'success_count': self.fusion_success_count,
+            'auto_trigger_enabled': getattr(self, 'auto_trigger_enabled', False)
+        })
         
         return info
     

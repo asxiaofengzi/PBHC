@@ -440,13 +440,25 @@ class MultimodalPPO(MHPPO):
         self.writer.add_scalar('Training/phase', 
                              1 if self.current_phase == 'multimodal' else 0, 
                              iteration)
-        
-        # 打印多模态信息
+          # 打印多模态信息
         print(f"\nMultimodal Info:")
         print(f"  Phase: {self.current_phase}")
-        print(f"  Fusion Success Rate: {multimodal_info.get('fusion_success_rate', 'N/A')}")
-        print(f"  Active Motions: {multimodal_info.get('max_active_motions', 'N/A')}")
+        
+        # 确保融合成功率显示正确的值
+        fusion_rate = multimodal_info.get('fusion_success_rate', 0.0)
+        if isinstance(fusion_rate, (int, float)):
+            print(f"  Fusion Success Rate: {fusion_rate:.3f}")
+        else:
+            print(f"  Fusion Success Rate: 0.000")
+            
+        print(f"  Active Motions: {multimodal_info.get('max_active_motions', 3)}")
         print(f"  Transitioning Envs: {multimodal_info.get('transition_envs', 0)}/{multimodal_info.get('total_envs', 0)}")
+        
+        # 添加更多调试信息
+        print(f"  Auto Trigger: {multimodal_info.get('auto_trigger_enabled', False)}")
+        print(f"  Total Attempts: {multimodal_info.get('total_attempts', 0)}")
+        print(f"  Success Count: {multimodal_info.get('success_count', 0)}")
+        print(f"  Step Counter: {multimodal_info.get('step_counter', 0)}")
     
     def save(self, path, infos=None):
         """保存模型，包括多模态组件"""

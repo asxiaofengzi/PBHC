@@ -18,8 +18,7 @@ env:
       motion_files:
         taichi: "example/motion_data/Horse-stance_pose.pkl"
         boxing: "example/motion_data/Hooks_punch.pkl"
-    
-    # Multimodal specific settings (只包含太极和拳击)
+      # Multimodal specific settings (只包含太极和拳击)
     multimodal_settings:
       motion_types: ["taichi", "boxing"]
       latent_dim: 128
@@ -37,16 +36,36 @@ env:
       fusion_temperature: 1.0
       compatibility_threshold: 0.3
       
-    # Curriculum learning (针对太极+拳击优化)
+    # Multimodal fusion configuration
+    multimodal:
+      enable_fusion: true
+      max_active_motions: 3
+      fusion_curriculum: true
+      latent_dim: 128
+      encoder_hidden_dims: [512, 256]
+      smoothing_window: 10
+      transition_threshold: 0.3
+      
+      # Auto trigger settings
+      auto_trigger: true
+      trigger_interval: 200    # 每200步检查一次触发
+      trigger_probability: 0.1  # 10%概率触发过渡
+      
+      # Reward scaling for multimodal components
+      fusion_smoothness_scale: 0.05
+      motion_diversity_scale: 0.03
+      fusion_quality_scale: 0.08
+      transition_success_scale: 0.1
+        # Curriculum learning (针对太极+拳击优化)
     curriculum_learning:
       enable: True
       phases:
         single_motion:
-          duration_iterations: 8000   # 减少单运动训练时间
+          duration_iterations: 100   # 大幅减少用于快速测试
           difficulty_range: [0.1, 0.3]
         
         dual_motion:
-          duration_iterations: 25000  # 重点训练太极+拳击融合
+          duration_iterations: 200  # 大幅减少用于快速测试
           difficulty_range: [0.3, 0.8]
           compatible_pairs_only: False  # 太极+拳击是挑战性组合
         
