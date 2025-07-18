@@ -162,9 +162,20 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
         # 如果融合控制器还没有初始化，跳过此步骤
         if self.fusion_controller is None:
             return
+        
+        # 检查张量大小是否匹配
+        if (not hasattr(self, 'motion_types_tensor') or 
+            self.motion_types_tensor.size(0) != self.num_envs):
+            print(f"[MultimodalEnv] 重新初始化运动类型张量 - num_envs: {self.num_envs}")
+            self._extend_motion_lib()
             
         # 编码当前运动状态
         current_motion_data = self._extract_current_motion_data()
+        
+        # 确保运动数据与环境数量匹配
+        if current_motion_data.size(0) != self.num_envs:
+            print(f"[MultimodalEnv] 运动数据维度不匹配: {current_motion_data.size(0)} vs {self.num_envs}")
+            return
         
         # 运动编码
         with torch.no_grad():
@@ -174,6 +185,11 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
         # 融合控制决策
         if hasattr(self, '_obs_buf_dict') and 'actor_obs' in self._obs_buf_dict:
             actor_obs = self._obs_buf_dict['actor_obs']
+            
+            # 确保观测维度匹配
+            if actor_obs.size(0) != self.num_envs:
+                print(f"[MultimodalEnv] 观测维度不匹配: {actor_obs.size(0)} vs {self.num_envs}")
+                return
             
             # 运动选择
             selection_result = self.fusion_controller.select_active_motions(
@@ -187,9 +203,16 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
                 selection_result['motion_probs']
             )
             
+            # 确保融合权重维度正确
+            if self.current_fusion_weights.size(0) != self.num_envs:
+                print(f"[MultimodalEnv] 融合权重维度不匹配: {self.current_fusion_weights.size(0)} vs {self.num_envs}")
+                # 重新初始化为正确大小
+                num_motion_types = len(MotionType)
+                self.current_fusion_weights = torch.ones(self.num_envs, num_motion_types, device=self.device) / num_motion_types
+            
             # 更新调度器历史
             dominant_motion = torch.argmax(self.current_fusion_weights, dim=-1)
-            for env_id in range(self.num_envs):
+            for env_id in range(min(self.num_envs, self.current_fusion_weights.size(0))):
                 self.fusion_scheduler.update_history(
                     self.current_fusion_weights[env_id:env_id+1],
                     dominant_motion[env_id].item()
@@ -265,17 +288,23 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
         super()._compute_reward()
         
         # 添加多模态奖励
-        if self.enable_fusion:
+        if self.enable_fusion and hasattr(self, 'current_fusion_weights'):
             multimodal_rewards = self._compute_multimodal_rewards()
             
             # 将多模态奖励添加到总奖励中
             for reward_name, reward_value in multimodal_rewards.items():
-                reward_scale = self.multimodal_config.get(f'{reward_name}_scale', 0.1)
-                self.rew_buf += reward_scale * reward_value
-                
-                # 记录到日志
-                if reward_name not in self.extras:
-                    self.extras[reward_name] = reward_value.mean()
+                # 确保奖励张量与 rew_buf 维度匹配
+                if reward_value.size(0) == self.rew_buf.size(0):
+                    reward_scale = self.multimodal_config.get(f'{reward_name}_scale', 0.1)
+                    self.rew_buf += reward_scale * reward_value
+                    
+                    # 记录到日志
+                    if reward_name not in self.extras:
+                        self.extras[reward_name] = reward_value.mean()
+                else:
+                    # 维度不匹配时只记录到日志，不添加到奖励中
+                    if reward_name not in self.extras:
+                        self.extras[reward_name] = reward_value.mean()
     
     def trigger_motion_transition(self, env_ids: torch.Tensor, target_motion_types: torch.Tensor):
         """触发运动过渡"""
@@ -327,8 +356,9 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
             # 增加步数计数器
             self.step_counter += 1
             
-            # 更新融合历史
-            if hasattr(self, 'current_fusion_weights'):
+            # 更新融合历史（确保维度匹配）
+            if (hasattr(self, 'current_fusion_weights') and 
+                self.current_fusion_weights.size(0) == self.num_envs):
                 self.fusion_history.append(self.current_fusion_weights.clone())
                 if len(self.fusion_history) > 50:  # 保持固定长度
                     self.fusion_history.pop(0)
@@ -341,11 +371,16 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
             self._check_transition_completion()
             
             # 更新课程学习
-            if self.common_step_counter % 1000 == 0:
+            if hasattr(self, 'common_step_counter') and self.common_step_counter % 1000 == 0:
                 self.update_curriculum()
     
     def _auto_trigger_transitions(self):
         """自动触发运动过渡"""
+        # 检查last_trigger_step是否匹配环境数量
+        if (not hasattr(self, 'last_trigger_step') or 
+            self.last_trigger_step.size(0) != self.num_envs):
+            self.last_trigger_step = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        
         # 检查哪些环境应该触发过渡
         should_trigger = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         
@@ -359,7 +394,8 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
                     self.last_trigger_step[env_id] = self.step_counter
         
         # 基于融合质量的触发（如果融合权重过于集中，触发新的运动）
-        if hasattr(self, 'current_fusion_weights'):
+        if (hasattr(self, 'current_fusion_weights') and 
+            self.current_fusion_weights.size(0) == self.num_envs):
             # 计算权重的方差，如果方差过小说明过于集中
             weight_variance = torch.var(self.current_fusion_weights, dim=-1)
             low_variance_envs = weight_variance < 0.1  # 阈值可调
@@ -383,7 +419,17 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
     
     def _check_transition_completion(self):
         """检查运动过渡是否完成"""
+        # 确保 transition_states 维度正确
+        if (not hasattr(self, 'transition_states') or 
+            self.transition_states.size(0) != self.num_envs):
+            self.transition_states = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+            
         if not torch.any(self.transition_states):
+            return
+        
+        # 确保融合权重可用并且维度匹配
+        if (not hasattr(self, 'current_fusion_weights') or 
+            self.current_fusion_weights.size(0) != self.num_envs):
             return
         
         transitioning_envs = self.transition_states.nonzero(as_tuple=False).squeeze(-1)
