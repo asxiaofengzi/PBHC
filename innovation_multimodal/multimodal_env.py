@@ -76,9 +76,9 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
         # 自动触发参数
         self.auto_trigger_enabled = self.multimodal_config.get('auto_trigger', True)
         self.trigger_interval = self.multimodal_config.get('trigger_interval', 200)  # 步数
-        self.trigger_probability = self.multimodal_config.get('trigger_probability', 0.1)  # 概率
-        self.last_trigger_step = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
-          # 扩展运动库以支持多运动类型
+        self.trigger_probability = self.multimodal_config.get('trigger_probability', 0.1)  # 概率        self.last_trigger_step = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        
+        # 扩展运动库以支持多运动类型
         self._extend_motion_lib()
         
         # 初始化融合系统
@@ -93,7 +93,8 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
             'Charleston_dance': MotionType.DANCE,
             'Hooks_punch': MotionType.BOXING,
             'Roundhouse_kick': MotionType.KARATE,
-            'Side_kick': MotionType.KARATE        }
+            'Side_kick': MotionType.KARATE
+        }
         
         # 创建运动类型索引
         self.motion_types_tensor = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)

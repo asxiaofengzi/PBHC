@@ -202,11 +202,17 @@ class MultimodalPPO(MHPPO):
         self.enable_expert_training = self.multimodal_config.get('enable_expert_training', True)
         self.encoder_learning_rate = config.get('motion_encoder_learning_rate', 1e-4)
         self.fusion_loss_weight = self.multimodal_config.get('fusion_loss_weight', 0.1)
-        
-        # 预训练阶段标志
+          # 预训练阶段标志
         self.pretraining_phase = self.multimodal_config.get('start_with_pretraining', True)
         self.pretraining_iterations = self.multimodal_config.get('pretraining_iterations', 5000)
         self.current_phase = 'pretraining' if self.pretraining_phase else 'multimodal'
+    
+    def setup(self):
+        """重写setup方法以使用多模态模型"""
+        print("Setting up Multimodal PPO")
+        self._setup_multimodal_models()
+        print("Setting up Storage") 
+        self._setup_storage()
     
     def _setup_multimodal_models(self):
         """设置多模态模型"""
@@ -239,13 +245,13 @@ class MultimodalPPO(MHPPO):
             self.motion_encoder.parameters(), 
             lr=self.encoder_learning_rate
         )
-        
-        # 融合控制器优化器
+          # 融合控制器优化器
         self.fusion_optimizer = optim.Adam(
             self.fusion_controller.parameters(),
             lr=self.encoder_learning_rate
         )
-          # 损失函数
+        
+        # 损失函数
         self.encoder_loss_fn = MotionEncoderLoss(
             recon_weight=self.multimodal_config.get('recon_weight', 1.0),
             kl_weight=self.multimodal_config.get('kl_weight', 0.1),
