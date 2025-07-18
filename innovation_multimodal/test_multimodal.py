@@ -339,12 +339,15 @@ def run_tests():
     if result.failures:
         print(f"\n❌ Failures:")
         for test, traceback in result.failures:
-            print(f"  - {test}: {traceback.split('AssertionError: ')[-1].split('\\n')[0]}")
+            error_msg = traceback.split('AssertionError: ')[-1].split('\n')[0]
+            print(f"  - {test}: {error_msg}")
     
     if result.errors:
         print(f"\n⚠️  Errors:")
         for test, traceback in result.errors:
-            print(f"  - {test}: {traceback.split('\\n')[-2]}")
+            error_lines = traceback.split('\n')
+            error_msg = error_lines[-2] if len(error_lines) > 1 else 'Unknown error'
+            print(f"  - {test}: {error_msg}")
     
     success = len(result.failures) == 0 and len(result.errors) == 0
     
