@@ -231,10 +231,15 @@ class MultimodalPPO(MHPPO):
             self.algo_obs_dim_dict,
             self.config.module_dict.critic
         ).to(self.device)
-        
-        # 获取运动编码器和融合控制器（从环境中）
+          # 获取运动编码器和融合控制器（从环境中）
         self.motion_encoder = self.env.motion_encoder
-        self.fusion_controller = self.env.fusion_controller
+        
+        # 等待融合控制器初始化
+        if hasattr(self.env, 'fusion_controller') and self.env.fusion_controller is not None:
+            self.fusion_controller = self.env.fusion_controller
+        else:
+            self.fusion_controller = None
+            print("[MultimodalPPO] 融合控制器尚未初始化，将在第一次更新时处理")
         
         # 设置优化器
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=self.actor_learning_rate)
@@ -244,12 +249,15 @@ class MultimodalPPO(MHPPO):
         self.encoder_optimizer = optim.Adam(
             self.motion_encoder.parameters(), 
             lr=self.encoder_learning_rate
-        )
-          # 融合控制器优化器
-        self.fusion_optimizer = optim.Adam(
-            self.fusion_controller.parameters(),
-            lr=self.encoder_learning_rate
-        )
+        )        
+        # 融合控制器优化器（延迟初始化）
+        if self.fusion_controller is not None:
+            self.fusion_optimizer = optim.Adam(
+                self.fusion_controller.parameters(),
+                lr=self.encoder_learning_rate
+            )
+        else:
+            self.fusion_optimizer = None
         
         # 损失函数
         self.encoder_loss_fn = MotionEncoderLoss(
@@ -332,53 +340,120 @@ class MultimodalPPO(MHPPO):
         losses['total_loss'].backward()
         nn.utils.clip_grad_norm_(self.motion_encoder.parameters(), self.max_grad_norm)
         self.encoder_optimizer.step()
-        
-        # 返回损失信息
+          # 返回损失信息
         return {k: v.item() for k, v in losses.items()}
     
     def _update_fusion_controller(self, policy_state_dict) -> Dict[str, float]:
         """更新融合控制器"""
+        # 确保融合控制器和优化器已初始化
+        self._init_fusion_controller_optimizer_if_needed()
+        
+        if self.fusion_controller is None or self.fusion_optimizer is None:
+            return {}
+        
         if not hasattr(self.env, 'current_fusion_weights'):
             return {}
         
-        # 获取观测和当前状态
-        obs = policy_state_dict.get('actor_obs')
-        current_latent = self.env.current_motion_latent
+        # 获取观测和当前状态 - 确保使用存储中的数据而不是当前环境状态
+        if hasattr(self, 'storage') and hasattr(self.storage, 'obs_dict'):
+            obs = self.storage.obs_dict.get('actor_obs')
+            if obs is not None:
+                # 取最新的观测数据，匹配批次大小
+                obs = obs[self.storage.step].reshape(-1, obs.size(-1))
+        else:
+            obs = policy_state_dict.get('actor_obs')
         
-        if obs is None or current_latent is None:
+        # 获取对应的运动潜在表示 - 需要重新计算以匹配批次大小
+        if obs is None:
             return {}
         
-        # 前向传播融合控制器
-        selection_result = self.fusion_controller.select_active_motions(obs, current_latent)
-        fusion_weights = self.fusion_controller.compute_fusion_weights(
-            obs, current_latent, selection_result['motion_probs']
-        )
+        batch_size = obs.size(0)
         
-        # 融合专家动作
-        if 'expert_actions' in policy_state_dict:
-            fusion_result = self.fusion_controller.fuse_expert_actions(
-                policy_state_dict['expert_actions'],
-                fusion_weights,
-                obs
+        # 重新计算运动潜在表示以匹配批次大小
+        try:
+            # 获取当前运动数据
+            motion_data = self.env._extract_current_motion_data()
+            motion_types = self.env.motion_types_tensor
+            
+            # 如果批次大小不匹配，需要调整
+            if motion_data.size(0) != batch_size:
+                # 使用重复或裁剪来匹配批次大小
+                if motion_data.size(0) < batch_size:
+                    # 重复数据
+                    repeat_factor = (batch_size + motion_data.size(0) - 1) // motion_data.size(0)
+                    motion_data = motion_data.repeat(repeat_factor, 1)[:batch_size]
+                    motion_types = motion_types.repeat(repeat_factor)[:batch_size]
+                else:
+                    # 裁剪数据
+                    motion_data = motion_data[:batch_size]
+                    motion_types = motion_types[:batch_size]
+            
+            # 重新编码运动状态
+            with torch.no_grad():
+                encoding_result = self.motion_encoder(motion_data, motion_types)
+                current_latent = encoding_result['latent_code']
+            
+        except Exception as e:
+            print(f"[MultimodalPPO] 无法计算运动潜在表示: {e}")
+            return {}
+        
+        # 确保维度匹配
+        if obs.size(0) != current_latent.size(0):
+            print(f"[MultimodalPPO] 批次大小不匹配: obs={obs.size(0)}, latent={current_latent.size(0)}")
+            return {}
+        
+        try:
+            # 前向传播融合控制器
+            selection_result = self.fusion_controller.select_active_motions(obs, current_latent)
+            fusion_weights = self.fusion_controller.compute_fusion_weights(
+                obs, current_latent, selection_result['motion_probs']
             )
             
-            # 融合损失：预期动作与实际动作的差异
-            actual_actions = policy_state_dict['actions']
-            expected_actions = fusion_result['fused_actions']
+            # 融合专家动作
+            if 'expert_actions' in policy_state_dict:
+                expert_actions = policy_state_dict['expert_actions']
+                
+                # 确保专家动作的批次大小匹配
+                if expert_actions.size(0) != batch_size:
+                    if expert_actions.size(0) < batch_size:
+                        repeat_factor = (batch_size + expert_actions.size(0) - 1) // expert_actions.size(0)
+                        expert_actions = expert_actions.repeat(repeat_factor, 1, 1)[:batch_size]
+                    else:
+                        expert_actions = expert_actions[:batch_size]
+                
+                fusion_result = self.fusion_controller.fuse_expert_actions(
+                    expert_actions,
+                    fusion_weights,
+                    obs
+                )
+                
+                # 融合损失：预期动作与实际动作的差异
+                actual_actions = policy_state_dict['actions']
+                expected_actions = fusion_result['fused_actions']
+                
+                # 确保动作的批次大小匹配
+                if actual_actions.size(0) != expected_actions.size(0):
+                    min_batch = min(actual_actions.size(0), expected_actions.size(0))
+                    actual_actions = actual_actions[:min_batch]
+                    expected_actions = expected_actions[:min_batch]
+                
+                fusion_loss = nn.MSELoss()(actual_actions, expected_actions.detach())
+                
+                # 反向传播
+                self.fusion_optimizer.zero_grad()
+                fusion_loss.backward()
+                nn.utils.clip_grad_norm_(self.fusion_controller.parameters(), self.max_grad_norm)
+                self.fusion_optimizer.step()
+                
+                return {
+                    'fusion_loss': fusion_loss.item(),
+                    'fusion_quality': fusion_result['fusion_quality'].mean().item(),
+                    'use_advanced_ratio': fusion_result['use_advanced_ratio'].item()
+                }
             
-            fusion_loss = nn.MSELoss()(actual_actions, expected_actions.detach())
-            
-            # 反向传播
-            self.fusion_optimizer.zero_grad()
-            fusion_loss.backward()
-            nn.utils.clip_grad_norm_(self.fusion_controller.parameters(), self.max_grad_norm)
-            self.fusion_optimizer.step()
-            
-            return {
-                'fusion_loss': fusion_loss.item(),
-                'fusion_quality': fusion_result['fusion_quality'].mean().item(),
-                'use_advanced_ratio': fusion_result['use_advanced_ratio'].item()
-            }
+        except Exception as e:
+            print(f"[MultimodalPPO] 融合控制器更新失败: {e}")
+            return {}
         
         return {}
     
@@ -514,3 +589,16 @@ class MultimodalPPO(MHPPO):
         
         self.current_learning_iteration = loaded_dict['iter']
         return loaded_dict.get('infos', {})
+    
+    def _init_fusion_controller_optimizer_if_needed(self):
+        """延迟初始化融合控制器优化器"""
+        if (self.fusion_optimizer is None and 
+            hasattr(self.env, 'fusion_controller') and 
+            self.env.fusion_controller is not None):
+            
+            self.fusion_controller = self.env.fusion_controller
+            self.fusion_optimizer = optim.Adam(
+                self.fusion_controller.parameters(),
+                lr=self.encoder_learning_rate
+            )
+            print("[MultimodalPPO] 融合控制器优化器已初始化")
