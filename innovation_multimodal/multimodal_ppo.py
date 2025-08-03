@@ -196,16 +196,28 @@ class MultimodalPPO(MHPPO):
         assert isinstance(env, MultimodalMotionTrackingEnv), "Environment must be MultimodalMotionTrackingEnv"
         
         super().__init__(env, config, log_dir, device)
-        
-        # 多模态相关配置
+          # 多模态相关配置
         self.multimodal_config = config.get('multimodal_config', {})
         self.enable_expert_training = self.multimodal_config.get('enable_expert_training', True)
         self.encoder_learning_rate = config.get('motion_encoder_learning_rate', 1e-4)
         self.fusion_loss_weight = self.multimodal_config.get('fusion_loss_weight', 0.1)
-          # 预训练阶段标志
+        
+        # 预训练阶段标志
         self.pretraining_phase = self.multimodal_config.get('start_with_pretraining', True)
         self.pretraining_iterations = self.multimodal_config.get('pretraining_iterations', 5000)
         self.current_phase = 'pretraining' if self.pretraining_phase else 'multimodal'
+        
+        # 根据当前阶段设置环境的融合状态
+        if self.current_phase == 'pretraining':
+            # 预训练阶段：禁用融合，专注于运动编码器训练
+            if hasattr(env, 'enable_fusion'):
+                env.enable_fusion = False
+                print("[MultimodalPPO] 预训练阶段：融合功能已禁用，专注于运动编码器训练")
+        else:
+            # 多模态阶段：启用融合
+            if hasattr(env, 'enable_fusion'):
+                env.enable_fusion = True
+                print("[MultimodalPPO] 多模态阶段：融合功能已启用")
     
     def setup(self):
         """重写setup方法以使用多模态模型"""
@@ -490,6 +502,14 @@ class MultimodalPPO(MHPPO):
             # 启用融合功能
             if hasattr(self.env, 'enable_fusion'):
                 self.env.enable_fusion = True
+                print("[MultimodalPPO] 融合功能已启用")
+            
+            # 确保融合控制器已经初始化
+            if hasattr(self.env, '_init_fusion_controller_if_needed'):
+                self.env._init_fusion_controller_if_needed()
+            
+            # 重新初始化融合控制器优化器
+            self._init_fusion_controller_optimizer_if_needed()
     
     def _training_step(self):
         """重写训练步骤"""
