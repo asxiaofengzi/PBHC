@@ -12,15 +12,15 @@ env:
     # Motion data configuration for multimodal learning
     motion_data:
       # Default motion file (required by base class, but will be overridden)
-      motion_file: "example/motion_data/Horse-stance_pose.pkl"
+      motion_file: "/home/js/xiaofengzi/PBHC/smpl_retarget/retargeted_motion_data/mink/C2 - Run to stand_poses.pkl"
       
       # Multimodal motion files mapping (只训练太极+拳击)
       motion_files:
-        taichi: "example/motion_data/Horse-stance_pose.pkl"
-        boxing: "example/motion_data/Hooks_punch.pkl"
+        walk: "/home/js/xiaofengzi/PBHC/smpl_retarget/retargeted_motion_data/mink/B2 - walk to stand_poses.pkl"
+        run: "/home/js/xiaofengzi/PBHC/smpl_retarget/retargeted_motion_data/mink/C2 - Run to stand_poses.pkl"
       # Multimodal specific settings (只包含太极和拳击)
     multimodal_settings:
-      motion_types: ["taichi", "boxing"]
+      motion_types: ["walk", "run"]
       latent_dim: 128
       max_motions_per_episode: 2  # 最多2种运动
       min_motion_duration_s: 3.0

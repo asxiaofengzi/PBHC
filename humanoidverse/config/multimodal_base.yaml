@@ -4,11 +4,12 @@ defaults:
   - base
   - env/multimodal_motion_tracking
   - algo/multimodal_ppo
-  # - obs: motion_tracking/main
-  # - rewards: motion_tracking/main
-  # - robot: g1/g1_23dof_lock_wrist
-  # - domain_rand: main
-  # - terrain: terrain_locomotion_plane
+  - obs: motion_tracking/main
+  - rewards: motion_tracking/main
+  - robot: g1/g1_23dof_lock_wrist
+  - simulator: isaacgym
+  - domain_rand: main
+  - terrain: terrain_locomotion_plane
   - _self_
 
 # Override global variables for multimodal learning
@@ -17,7 +18,7 @@ experiment_name: multimodal_learning
 log_task_name: MULTIMODAL
 
 # Simulation parameters
-num_envs: 2048  # Reduced for multimodal complexity
+num_envs: 4096  # Reduced for multimodal complexity
 max_episode_length_s: 30  # Shorter episodes for faster switching
 
 # Training parameters
@@ -42,7 +43,7 @@ save_dir: ${experiment_dir}/.hydra
 
 force_flat_terrain: False
 
-use_wandb: False
+use_wandb: True
 
 ### Simulation
 sim_type: isaacgym
@@ -53,19 +54,19 @@ eval_overrides:
   headless: False
   num_envs: 1
   auto_load_latest: False
-  use_wandb: False
+  use_wandb: True
 
 # Robot motion configuration
 robot:
   motion:
-    motion_file: "example/motion_data/Horse-stance_pose.pkl"  # Default motion file
+    motion_file: "/home/js/xiaofengzi/PBHC/smpl_retarget/retargeted_motion_data/mink/B2 - walk to stand_poses.pkl"  # Default motion file
 
 # Multimodal specific parameters (只训练太极+拳击)
 multimodal:
   # Motion types to learn
   motion_types:
-    - taichi
-    - boxing
+    - walk
+    - run
   
   # Training phases (针对太极+拳击优化)
   training_phases:
@@ -102,7 +103,7 @@ multimodal:
   # Evaluation (只评估太极+拳击融合)
   evaluation:
     motion_combinations: 
-      - ["taichi", "boxing"]      # 太极马步 + 拳击勾拳
+      - ["walk", "run"]      # 太极马步 + 拳击勾拳
     
     metrics:
       - motion_similarity
@@ -113,7 +114,7 @@ multimodal:
 
 # Data paths
 data_paths:
-  motion_data_dir: "example/motion_data"
+  motion_data_dir: "/home/js/xiaofengzi/PBHC/smpl_retarget/retargeted_motion_data/mink"
   pretrained_models_dir: "innovation_multimodal/pretrained"
   output_dir: "${experiment_dir}/multimodal_output"
 

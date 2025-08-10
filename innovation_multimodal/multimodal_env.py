@@ -293,16 +293,61 @@ class MultimodalMotionTrackingEnv(LeggedRobotMotionTracking):
             
             # 将多模态奖励添加到总奖励中
             for reward_name, reward_value in multimodal_rewards.items():
-                # 确保奖励张量与 rew_buf 维度匹配
-                if reward_value.size(0) == self.rew_buf.size(0):
+                # 调试信息：打印张量形状
+                if not hasattr(self, '_reward_debug_printed'):
+                    print(f"[MultimodalEnv] rew_buf shape: {self.rew_buf.shape}")
+                    print(f"[MultimodalEnv] use_vec_reward: {getattr(self.config, 'use_vec_reward', False)}")
+                    print(f"[MultimodalEnv] reward_value ({reward_name}) shape: {reward_value.shape}")
+                    self._reward_debug_printed = True
+                
+                # 安全的奖励添加，处理维度不匹配问题
+                if reward_value.dim() == 1 and reward_value.size(0) == self.num_envs:
+                    # 一维奖励，匹配环境数量
                     reward_scale = self.multimodal_config.get(f'{reward_name}_scale', 0.1)
-                    self.rew_buf += reward_scale * reward_value
+                    
+                    if hasattr(self.config, 'use_vec_reward') and self.config.use_vec_reward:
+                        # 向量化奖励模式: rew_buf 是 (num_envs, num_rew_fn)
+                        if self.rew_buf.dim() == 2 and self.rew_buf.size(1) > 0:
+                            # 添加到第一列（主要奖励）
+                            self.rew_buf[:, 0] += reward_scale * reward_value
+                        else:
+                            # 如果rew_buf意外是1D，直接相加
+                            self.rew_buf += reward_scale * reward_value
+                    else:
+                        # 标准模式: rew_buf 是 (num_envs,)
+                        self.rew_buf += reward_scale * reward_value
                     
                     # 记录到日志
                     if reward_name not in self.extras:
                         self.extras[reward_name] = reward_value.mean()
+                        
+                elif reward_value.dim() == 2 and reward_value.size(0) == self.num_envs:
+                    # 二维奖励，需要降维处理
+                    reward_scale = self.multimodal_config.get(f'{reward_name}_scale', 0.1)
+                    
+                    # 对二维奖励取平均或和来降维
+                    if reward_name in ['fusion_smoothness', 'motion_diversity', 'fusion_quality']:
+                        reward_scalar = reward_value.mean(dim=-1)  # 取平均
+                    else:
+                        reward_scalar = reward_value.sum(dim=-1)   # 取和
+                    
+                    if hasattr(self.config, 'use_vec_reward') and self.config.use_vec_reward:
+                        # 向量化奖励模式
+                        if self.rew_buf.dim() == 2 and self.rew_buf.size(1) > 0:
+                            self.rew_buf[:, 0] += reward_scale * reward_scalar
+                        else:
+                            self.rew_buf += reward_scale * reward_scalar
+                    else:
+                        # 标准模式
+                        self.rew_buf += reward_scale * reward_scalar
+                    
+                    # 记录到日志
+                    if reward_name not in self.extras:
+                        self.extras[reward_name] = reward_value.mean()
+                        
                 else:
-                    # 维度不匹配时只记录到日志，不添加到奖励中
+                    # 维度不匹配，只记录到日志，不添加到奖励
+                    print(f"[MultimodalEnv] 奖励维度不匹配 {reward_name}: {reward_value.shape} vs expected: ({self.num_envs},) or ({self.num_envs}, *)")
                     if reward_name not in self.extras:
                         self.extras[reward_name] = reward_value.mean()
     
