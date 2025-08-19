@@ -5,26 +5,35 @@ defaults:
   - domain_rand_base
 
 domain_rand:
+  # 域随机化参数重新初始化的频率。-1表示在每次环境重置时都重新随机化。
   reinit_epis_rand: -1
   
-  _push_fixed: true
-  push_robots : True
-  push_interval_s : [5, 10]
-  max_push_vel_xy : 0.1
+  # --- 机器人外部干扰 ---
+  _push_fixed: true # 内部标志，可能用于启用固定的机器人推动逻辑
+  push_robots : True # 是否在训练中对机器人施加外力（推力），以增强其平衡和抗干扰能力
+  push_interval_s : [5, 10] # 施加推力的时间间隔（秒），在此范围内随机取值
+  max_push_vel_xy : 0.1 # 推力的最大速度（米/秒），决定了推力的强度
 
-  randomize_base_com : True
-  base_com_range: #kg
+  # --- 物理参数随机化 ---
+  # ** 基座（Base）质心随机化 **
+  randomize_base_com : True # 是否随机化机器人基座（如骨盆）的质心（Center of Mass）
+  base_com_range: # 质心在x, y, z轴上的随机偏移范围（米）
       x : [-0.05, 0.05]
       y : [-0.05, 0.05]
       z : [-0.01, 0.01]
 
-  randomize_link_mass : True
-  link_mass_range : [0.9, 1.1] # *factor
-  randomize_link_com : False
-  link_com_range: #m 
+  # ** 连杆（Links）质量随机化 **
+  randomize_link_mass : True # 是否随机化机器人各个连杆（身体部件）的质量
+  link_mass_range : [0.8, 1.2] # 质量的随机化乘法因子范围
+  
+  # ** 连杆质心随机化 **
+  randomize_link_com : False # 是否随机化连杆的质心（当前禁用）
+  link_com_range: # 连杆质心的随机偏移范围（米）
       x : [-0.01, 0.01]
       y : [-0.01, 0.01]
       z : [-0.01, 0.01]
+  
+  # 将被随机化的连杆名称列表
   randomize_link_body_names : [
       'pelvis', 'torso_link',
       'left_shoulder_pitch_link', 'left_shoulder_roll_link', 'left_shoulder_yaw_link', 'left_elbow_link',
@@ -33,9 +42,10 @@ domain_rand:
       'right_hip_yaw_link', 'right_hip_roll_link', 'right_hip_pitch_link', 'right_knee_link', 'right_ankle_pitch_link', 'right_ankle_roll_link'
   ]
 
-  randomize_link_inertia : True
-  link_inertia_range : [0.9,1.1] # *factor
-  randomize_link_inertia_names : [
+  # ** 连杆转动惯量随机化 **
+  randomize_link_inertia : True # 是否随机化连杆的转动惯量
+  link_inertia_range : [0.9,1.1] # 转动惯量的随机化乘法因子范围
+  randomize_link_inertia_names : [ # 将被随机化转动惯量的连杆名称列表
       'pelvis', 'torso_link',
       'left_shoulder_pitch_link', 'left_shoulder_roll_link', 'left_shoulder_yaw_link', 'left_elbow_link',
       'right_shoulder_pitch_link', 'right_shoulder_roll_link', 'right_shoulder_yaw_link', 'right_elbow_link',
@@ -43,65 +53,77 @@ domain_rand:
       'right_hip_yaw_link', 'right_hip_roll_link', 'right_hip_pitch_link', 'right_knee_link', 'right_ankle_pitch_link', 'right_ankle_roll_link'
   ]
 
+  # ** 特殊物理场景：上半身加重 **
   heavy_upper: 
-    enable: False
-    ratio: 1.1 # all mass and inertia are scaled by this ratio
-    body_names: [
+    enable: False # 是否启用上半身加重（当前禁用）
+    ratio: 1.1 # 如果启用，上半身连杆的质量和惯量将乘以该比例
+    body_names: [ # 定义为“上半身”的连杆
         'torso_link',
         'left_shoulder_pitch_link', 'left_shoulder_roll_link', 'left_shoulder_yaw_link', 'left_elbow_link',
         'right_shoulder_pitch_link', 'right_shoulder_roll_link', 'right_shoulder_yaw_link', 'right_elbow_link',
     ]
-  randomize_pd_gain : True
-  kp_range : [0.9, 1.1]
-  kd_range : [0.9, 1.1]
+  
+  # --- 控制器（Controller）参数随机化 ---
+  randomize_pd_gain : True # 是否随机化PD控制器（Proportional-Derivative Controller）的增益
+  kp_range : [0.9, 1.1] # 比例增益（Kp）的随机化乘法因子范围
+  kd_range : [0.9, 1.1] # 微分增益（Kd）的随机化乘法因子范围
 
+  # ** 并行/串行PD控制器设置 **
   parallel_serial_pd:
-    # multiplicative composition with randomize_pd_gain, not replacing it
-    enable: False
-    ratio: [0.8, 1.2] 
-    joint_idx: [4,5, 10,11, 13,14]
+    # 与randomize_pd_gain相乘组合，而不是替换它
+    enable: False # 是否启用（当前禁用）
+    ratio: [0.8, 1.2] # 增益比例范围
+    joint_idx: [4,5, 10,11, 13,14] # 应用此设置的关节索引
 
 
-  randomize_friction : True
-  # randomize_friction : False
-  friction_range : [0.2, 1.2]
-  randomize_restitution : False
-  restitution_range : [0.0, 1.0]
+  # --- 环境接触参数随机化 ---
+  randomize_friction : True # 是否随机化接触面（如地面）的摩擦系数
+  friction_range : [0.2, 1.2] # 摩擦系数的随机取值范围
+  randomize_restitution : False # 是否随机化恢复系数（bounciness，即碰撞后的“弹力”）（当前禁用）
+  restitution_range : [0.0, 1.0] # 恢复系数的范围
 
-  randomize_base_mass : False # replaced by randomize_link_mass
+  # ** 基座质量随机化（已由连杆质量随机化替代） **
+  randomize_base_mass : False # 已被randomize_link_mass替代
   added_mass_range : [-5., 10.]  
   
-  randomize_torque_rfi : True
-  use_rao : True
-  rao_lim : 0.05
-  rfi_lim : 0.05
-  randomize_rfi_lim : True
-  rfi_lim_range : [0.5, 1.5]
+  # --- 执行器（Actuator）和传感器（Sensor）效应随机化 ---
+  randomize_torque_rfi : True # 是否随机化扭矩的残余力注入（Residual Force Injection）
+  use_rao : True # 是否使用残余执行器观测（Residual Actuator Observation）
+  rao_lim : 0.05 # RAO的限制值
+  rfi_lim : 0.05 # RFI的限制值
+  randomize_rfi_lim : True # 是否随机化RFI的限制值
+  rfi_lim_range : [0.5, 1.5] # RFI限制值的随机化范围
 
-  randomize_ctrl_delay : True
-  ctrl_delay_step_range : [0, 2] # integer max real delay is 90ms
+  # ** 控制延迟随机化 **
+  randomize_ctrl_delay : True # 是否随机化控制延迟（从发出指令到实际执行的延迟）
+  ctrl_delay_step_range : [0, 2] # 控制延迟的随机范围（单位：仿真步数）
 
-  randomize_motion_ref_xyz: False # head only for now
-  motion_ref_xyz_range : [[-0.02, 0.02],[-0.02, 0.02],[-0.1, 0.1]]
+  # --- 运动参考（Motion Reference）随机化 ---
+  randomize_motion_ref_xyz: False # 是否随机化参考运动轨迹的位置（当前禁用）
+  motion_ref_xyz_range : [[-0.02, 0.02],[-0.02, 0.02],[-0.1, 0.1]] # 运动参考位置的XYZ偏移范围
 
-  motion_package_loss: False
-  package_loss_range: [1, 10] # dt = 0.02s, delay for 0.02s - 0.2s
-  package_loss_interval_s : 2
+  # ** 运动数据丢包模拟 **
+  motion_package_loss: False # 是否模拟运动数据传输中的“丢包”现象（当前禁用）
+  package_loss_range: [1, 10] # 丢包导致的延迟范围（单位：仿真步数，dt=0.02s，即延迟0.02s-0.2s）
+  package_loss_interval_s : 2 # 发生丢包的平均时间间隔（秒）
 
 
-  born_offset : False
-  born_offset_curriculum: False
-  born_offset_level_down_threshold: 50
-  born_offset_level_up_threshold: 120
-  level_degree: 0.00005
-  born_distance : 0.25
-  born_offset_range: [0.0, 1]
-  born_offset_possibility : 1.0
+  # --- 初始状态（Born State）随机化与课程学习 ---
+  # ** 初始位置偏移 **
+  born_offset : False # 是否在机器人出生时施加一个位置偏移（当前禁用）
+  born_offset_curriculum: False # 是否对位置偏移进行课程学习（从简单到困难）（当前禁用）
+  born_offset_level_down_threshold: 50 # 降低课程难度的阈值
+  born_offset_level_up_threshold: 120 # 提升课程难度的阈值
+  level_degree: 0.00005 # 课程难度调整的粒度
+  born_distance : 0.25 # 偏移的距离
+  born_offset_range: [0.0, 1] # 偏移范围
+  born_offset_possibility : 1.0 # 发生偏移的概率
 
-  born_heading_curriculum: False
-  born_heading_randomization : False
-  born_heading_level_down_threshold: 50
-  born_heading_level_up_threshold: 120
-  born_heading_degree: 10
-  born_heading_range: [0, 180]
-  born_heading_level_degree: 0.00005
+  # ** 初始朝向偏移 **
+  born_heading_curriculum: False # 是否对朝向偏移进行课程学习（当前禁用）
+  born_heading_randomization : False # 是否随机化初始朝向（当前禁用）
+  born_heading_level_down_threshold: 50 # 降低课程难度的阈值
+  born_heading_level_up_threshold: 120 # 提升课程难度的阈值
+  born_heading_degree: 10 # 朝向偏移的角度
+  born_heading_range: [0, 180] # 初始朝向的随机范围（角度）
+  born_heading_level_degree: 0.00005 # 课程难度调整的粒度
